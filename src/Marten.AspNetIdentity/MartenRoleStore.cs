@@ -1,9 +1,11 @@
+using Marten.Services;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging;
 using System;
+using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Logging;
 
 namespace Marten.AspNetIdentity
 {
@@ -36,13 +38,11 @@ namespace Marten.AspNetIdentity
 		{
 			try
 			{
-				using (IDocumentSession session = _documentStore.OpenSession())
-				{
-					session.Store(role);
-					await session.SaveChangesAsync(cancellationToken);
+                using IDocumentSession session = CreateSession();
 
-					return IdentityResult.Success;
-				}
+                session.Store(role);
+				await session.SaveChangesAsync(cancellationToken);
+				return IdentityResult.Success;
 			}
 			catch (Exception ex)
 			{
@@ -55,13 +55,12 @@ namespace Marten.AspNetIdentity
 		{
 			try
 			{
-				using (IDocumentSession session = _documentStore.OpenSession())
-				{
-					session.Update(role);
-					await session.SaveChangesAsync(cancellationToken);
+                using IDocumentSession session = CreateSession();
+                
+				session.Update(role);
+				await session.SaveChangesAsync(cancellationToken);
 
-					return IdentityResult.Success;
-				}
+				return IdentityResult.Success;
 			}
 			catch (Exception ex)
 			{
@@ -74,13 +73,12 @@ namespace Marten.AspNetIdentity
 		{
 			try
 			{
-				using (IDocumentSession session = _documentStore.OpenSession())
-				{
-					session.Delete(role);
-					await session.SaveChangesAsync(cancellationToken);
+                using IDocumentSession session = CreateSession();
 
-					return IdentityResult.Success;
-				}
+                session.Delete(role);
+				await session.SaveChangesAsync(cancellationToken);
+
+				return IdentityResult.Success;
 			}
 			catch (Exception ex)
 			{
@@ -133,5 +131,14 @@ namespace Marten.AspNetIdentity
 				return actualRole;
 			}
 		}
-	}
+
+        private IDocumentSession CreateSession()
+        {
+            return _documentStore.OpenSession(new SessionOptions
+            {
+                Tracking = DocumentTracking.IdentityOnly,
+                IsolationLevel = IsolationLevel.ReadCommitted
+            });
+        }
+    }
 }

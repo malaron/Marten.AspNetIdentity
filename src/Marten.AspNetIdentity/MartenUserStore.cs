@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
+using Marten.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 
@@ -34,20 +36,14 @@ namespace Marten.AspNetIdentity
 			}
 		}
 
-		public void Wipe()
+		public async Task Wipe()
 		{
-			using (IDocumentSession session = _documentStore.OpenSession())
-			{
-				session.DeleteWhere<TUser>(x => true);
-				session.SaveChanges();
-			}
+            using IDocumentSession session = CreateSession();
+            session.DeleteWhere<TUser>(x => true);
+			await session.SaveChangesAsync();
 		}
 
-		public MartenUserStore(IDocumentStore documentStore, ILogger<MartenUserStore<TUser>> logger)
-		{
-			_documentStore = documentStore;
-			_logger = logger;
-		}
+		public MartenUserStore(IDocumentStore documentStore, ILogger<MartenUserStore<TUser>> logger) => (_documentStore, _logger) = (documentStore, logger);
 
 		public Task<string> GetUserIdAsync(TUser user, CancellationToken cancellationToken)
 		{
@@ -82,13 +78,12 @@ namespace Marten.AspNetIdentity
 
 			try
 			{
-				using (IDocumentSession session = _documentStore.OpenSession())
-				{
-					session.Store(user);
-					await session.SaveChangesAsync(cancellationToken);
-					return IdentityResult.Success;
-				}
-			}
+                using IDocumentSession session = CreateSession();
+
+                session.Store(user);
+                await session.SaveChangesAsync(cancellationToken);
+                return IdentityResult.Success;
+            }
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Failed to create the user in Marten.");
@@ -100,12 +95,11 @@ namespace Marten.AspNetIdentity
 		{
 			try
 			{
-				using (IDocumentSession session = _documentStore.OpenSession())
-				{
-					session.Update(user);
-					await session.SaveChangesAsync(cancellationToken);
-					return IdentityResult.Success;
-				}
+				using IDocumentSession session = CreateSession();
+
+				session.Update(user);
+				await session.SaveChangesAsync(cancellationToken);
+				return IdentityResult.Success;
 			}
 			catch (Exception ex)
 			{
@@ -118,12 +112,11 @@ namespace Marten.AspNetIdentity
 		{
 			try
 			{
-				using (IDocumentSession session = _documentStore.OpenSession())
-				{
-					session.Delete(user);
-					await session.SaveChangesAsync(cancellationToken);
-					return IdentityResult.Success;
-				}
+                using IDocumentSession session = CreateSession();
+
+                session.Delete(user);
+				await session.SaveChangesAsync(cancellationToken);
+				return IdentityResult.Success;
 			}
 			catch (Exception ex)
 			{
@@ -316,11 +309,9 @@ namespace Marten.AspNetIdentity
 
 				user.RoleClaims = userRoleClaims;
 
-				using (IDocumentSession session = _documentStore.OpenSession())
-				{
-					session.Store(user);
-					await session.SaveChangesAsync(cancellationToken);
-				}
+                using IDocumentSession session = CreateSession();
+                session.Store(user);
+				await session.SaveChangesAsync(cancellationToken);
 			}
 			catch (Exception ex)
 			{
@@ -378,8 +369,17 @@ namespace Marten.AspNetIdentity
 															.Where(x => x.RoleClaims.Contains(claim.Value))
 															.ToListAsync(cancellationToken);
 
-				return readonlyList.ToList();
+                return readonlyList.ToList();
 			}
 		}
-	}
+
+        private IDocumentSession CreateSession()
+        {
+            return _documentStore.OpenSession(new SessionOptions
+            {
+                Tracking = DocumentTracking.IdentityOnly,
+                IsolationLevel = IsolationLevel.ReadCommitted
+            });
+        }
+    }
 }
